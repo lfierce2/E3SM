@@ -186,7 +186,11 @@ subroutine forecast(lat, psm1, psm2,ps, &
 !  advection calculation.  Skip to diagnostic estimates of vertical term.
       i=1
       do k=1,plev
+#ifdef MODEL_THETA_L
+         tfcst(k) = t3m2(k) + t2(k) + divt3d(k)
+#else      
          tfcst(k) = t3m2(k) + ztodt*t2(k) + ztodt*divt3d(k)
+#endif
       end do
       do m=1,pcnst
          do k=1,plev
@@ -463,8 +467,13 @@ end if
 !
 
    do k=1,plev
+#ifdef MODEL_THETA_L
+     tfcst(k) = tfcst(k) + wfld(k)*t3m1(k)*rair/(cpair*pmidm1(k)) &
+         + (t2(k) + divt(k))     
+#else
      tfcst(k) = tfcst(k) + ztodt*wfld(k)*t3m1(k)*rair/(cpair*pmidm1(k)) &
          + ztodt*(t2(k) + divt(k))
+#endif
      do m=1,pcnst
        qfcst(1,k,m) = qfcst(1,k,m) + ztodt*divq(k,m)
      end do
