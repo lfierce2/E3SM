@@ -108,9 +108,10 @@ subroutine scm_setfield(elem,iop_update_phase1)
   integer i, j, k, ie
 
   do ie=1,nelemd
-    if (have_ps .and. .not. iop_update_phase1) elem(ie)%state%ps_v(:,:,:) = psobs 
+    if (have_ps .and. use_replay .and. .not. iop_update_phase1) elem(ie)%state%ps_v(:,:,:) = psobs
+    if (have_ps .and. .not. use_replay) elem(ie)%state%ps_v(:,:,:) = psobs 
     do i=1, PLEV
-      if (have_omega .and. iop_update_phase1) elem(ie)%derived%omega_p(:,:,i)=wfld(i)  !     set t to tobs at first
+      if (have_omega .and. iop_update_phase1) elem(ie)%derived%omega_p(:,:,i)=wfld(k)  !     set t to tobs at first
     end do
   end do
 
@@ -213,7 +214,7 @@ subroutine apply_SC_forcing(elem,hvcoord,tl,n,t_before_advance,nets,nete)
 #endif
     elem(ie)%state%v(i,j,1,:,t1) = forecast_u(:)
     elem(ie)%state%v(i,j,2,:,t1) = forecast_v(:)
-    elem(ie)%state%Q(i,j,:,:) = forecast_q(:,:)
+    elem(ie)%state%Q(i,j,:,:) = forecast_q(:,:) 
 
     end subroutine apply_SC_forcing
 
