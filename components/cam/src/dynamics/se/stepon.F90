@@ -504,6 +504,8 @@ subroutine stepon_run3(dtime, cam_out, phys_state, dyn_in, dyn_out)
 
 #endif   
    
+   write(*,*) 'QBeforeDYNpre ', dyn_in%elem(1)%state%Q(1,1,:,1)
+   
    if (single_column) then
      
      ! Update IOP properties e.g. omega, divT, divQ
@@ -515,12 +517,16 @@ subroutine stepon_run3(dtime, cam_out, phys_state, dyn_in, dyn_out)
        call scm_setfield(elem,iop_update_phase1)
      endif   
 
-   endif   
+   endif 
+   
+   write(*,*) 'QBeforeDYN ', dyn_in%elem(1)%state%Q(1,1,:,1)
 
    call t_barrierf('sync_dyn_run', mpicom)
    call t_startf ('dyn_run')
    call dyn_run(dyn_out,rc)	
    call t_stopf  ('dyn_run')
+   
+   write(*,*) 'QAfterDYN ', dyn_in%elem(1)%state%Q(1,1,:,1)
    
    ! Update to get tendency 
 #if (defined E3SM_SCM_REPLAY) 

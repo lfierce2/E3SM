@@ -1641,7 +1641,7 @@ end subroutine clubb_init_cnst
    enddo
    
    !  At each CLUBB call, initialize mean momentum  and thermo CLUBB state 
-   !  from the CAM state 
+   !  from the CAM state    
 
    do k=1,pver   ! loop over levels
      do i=1,ncol ! loop over columns

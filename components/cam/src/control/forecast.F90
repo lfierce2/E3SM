@@ -628,7 +628,7 @@ end if
 
    call outfld('TOBS',tobs,plon,lat)
    call outfld('QOBS',qobs,plon,lat)
-   call outfld('TDIFF',tdiff,plon,lat)
+!   call outfld('TDIFF',tdiff,plon,lat)
    call outfld('QDIFF',qdiff,plon,lat)
    if( use_iop ) then
       call outfld('DIVQ',divq,plon,lat)

@@ -1020,7 +1020,7 @@ contains
     integer :: ie,i,j,k,n,q,t,scm_dum
     integer :: n0_qdp,np1_qdp,r,nstep_end,nets_in,nete_in,step_factor
     logical :: compute_diagnostics, independent_time_steps
-
+    write(*,*) 'INDYNAMICS'
     ! Use the flexible time stepper if dt_remap_factor == 0 (vertically Eulerian
     ! dynamics) or dt_remap < dt_tracer. This applies to SL transport only.
     independent_time_steps = transport_alg > 1 .and. dt_remap_factor < dt_tracer_factor
@@ -1046,7 +1046,7 @@ contains
 
     ! compute scalar diagnostics if currently active
     if (compute_diagnostics) call run_diagnostics(elem,hvcoord,tl,3,.true.,nets,nete)
-
+    write(*,*) 'INDYNAMICS2'
     if (.not. independent_time_steps) then
        call TimeLevel_Qdp(tl, dt_tracer_factor, n0_qdp, np1_qdp)
 
@@ -1068,9 +1068,9 @@ contains
        call copy_qdp_h2d( elem , n0_qdp )
        call t_stopf("copy_qdp_h2d")
 #endif
-
+      write(*,*) 'INDYNAMICS3'
       if (.not. single_column) then 
-
+        write(*,*) 'NOTHEREPRIMBASE'
         ! Loop over rsplit vertically lagrangian timesiteps
         call prim_step(elem, hybrid, nets, nete, dt, tl, hvcoord, compute_diagnostics)
 
@@ -1080,7 +1080,7 @@ contains
         enddo
 
       else 
-
+        write(*,*) 'HEREPRIMBASE'
         ! Single Column Case
         ! Loop over rsplit vertically lagrangian timesiteps
         call prim_step_scm(elem, nets, nete, dt, tl, hvcoord)
@@ -1120,7 +1120,8 @@ contains
     else
       ! This time stepping routine permits the vertical remap time
       ! step to be shorter than the tracer transport time step.
-      call prim_step_flexible(hybrid, elem, nets, nete, dt, tl, hvcoord, compute_diagnostics)
+      call prim_step_flexible(hybrid, elem, nets, nete, dt, tl, hvcoord, &
+             compute_diagnostics, single_column)
     end if ! independent_time_steps
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1249,7 +1250,8 @@ contains
 
   end subroutine prim_step
 
-  subroutine prim_step_flexible(hybrid, elem, nets, nete, dt, tl, hvcoord, compute_diagnostics)
+  subroutine prim_step_flexible(hybrid, elem, nets, nete, dt, tl, hvcoord, &            
+                                compute_diagnostics, single_column)
     use control_mod,        only: ftype, nu_p, dt_tracer_factor, dt_remap_factor, prescribed_wind, transport_alg
     use hybvcoord_mod,      only: hvcoord_t
     use parallel_mod,       only: abortmp
@@ -1269,9 +1271,10 @@ contains
     real(kind=real_kind), intent(in)    :: dt       ! "timestep dependent" timestep
     type(TimeLevel_t),    intent(inout) :: tl
     logical,              intent(in)    :: compute_diagnostics
+    logical,              intent(in)    :: single_column
 
     real(kind=real_kind) :: dt_q, dt_remap, dp(np,np,nlev)
-    integer :: ie, q, k, n, n0_qdp, np1_qdp
+    integer :: ie, q, k, n, n0_qdp, np1_qdp, nets_in, nete_in
     logical :: compute_diagnostics_it, apply_forcing
 
     dt_q = dt*dt_tracer_factor
@@ -1327,8 +1330,20 @@ contains
           end if
        end if
 
-       call prim_advance_exp(elem, deriv1, hvcoord, hybrid, dt, tl, nets, nete, &
-            compute_diagnostics_it)
+       if (.not. single_column) then 
+         call prim_advance_exp(elem, deriv1, hvcoord, hybrid, dt, tl, nets, nete, &
+              compute_diagnostics_it)
+       else
+       	 if (single_column) then
+           nets_in=1
+           nete_in=1
+         else
+           nets_in=nets
+           nete_in=nete
+         endif
+         write(*,*) 'PRIMhere!'
+         call prim_step_scm(elem, nets, nete, dt, tl, hvcoord)
+       endif
 
        if (dt_remap_factor == 0) then
           ! Set np1_qdp to -1. Since dt_remap == 0, the only part of
@@ -1353,7 +1368,17 @@ contains
              else
                 ! Set np1_qdp to -1 to remap dynamics variables but
                 ! not tracers.
-                call vertical_remap(hybrid, elem, hvcoord, dt_remap, tl%np1, -1, nets, nete)
+		
+		if (single_column) then
+                  nets_in=1
+                  nete_in=1
+                else
+                  nets_in=nets
+                  nete_in=nete
+                endif
+		
+                call vertical_remap(hybrid, elem, hvcoord, dt_remap, tl%np1, -1, &
+		                    nets_in, nete_in)
              end if
           end if
        end if
@@ -1757,6 +1782,8 @@ contains
     call TimeLevel_Qdp(tl, dt_tracer_factor, qn0)  ! compute current Qdp() timelevel 
     call set_prescribed_scm(elem,dt,tl)
     
+    write(*,*) 'PRESCRIBEDSCMHERE'
+    
     do n=2,dt_tracer_factor
  
       call TimeLevel_update(tl,"leapfrog")
@@ -1875,12 +1902,16 @@ contains
       elem(1)%state%dp3d(:,:,k,np1) = elem(1)%state%dp3d(:,:,k,n0) &
         + dt*(eta_dot_dpdn(:,:,k+1) - eta_dot_dpdn(:,:,k))    
     enddo       
+    
+    write(*,*) 'DP3D ', elem(1)%state%dp3d(1,1,:,np1)
 
     do p=1,qsize
       do k=1,nlev
         elem(1)%state%Qdp(:,:,k,p,np1_qdp)=elem(1)%state%Q(:,:,k,p)*elem(1)%state%dp3d(:,:,k,np1)
       enddo
     enddo
+    
+    write(*,*) 'QdpSTUFF ', elem(1)%state%Qdp(1,1,:,1,np1_qdp)
     
   end subroutine set_prescribed_scm        
     

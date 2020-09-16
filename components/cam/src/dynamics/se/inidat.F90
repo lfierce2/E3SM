@@ -400,6 +400,7 @@ contains
                 indx = indx + 1
              end do
           end do
+	  if (ie .eq. 1) write(*,*) 'Qinit ', elem(ie)%state%Q(1,1,:,1)
        end do
     end do
     ! Cleanup
