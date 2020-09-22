@@ -111,7 +111,9 @@ subroutine scm_setfield(elem,iop_update_phase1)
     if (have_ps .and. use_replay .and. .not. iop_update_phase1) elem(ie)%state%ps_v(:,:,:) = psobs
     if (have_ps .and. .not. use_replay) elem(ie)%state%ps_v(:,:,:) = psobs 
     do i=1, PLEV
-      if (have_omega .and. iop_update_phase1) elem(ie)%derived%omega_p(:,:,i)=wfld(k)  !     set t to tobs at first
+      if (have_omega .and. iop_update_phase1) then
+        elem(ie)%derived%omega_p(:,:,i)=wfld(i)
+      endif
     end do
   end do
 
