@@ -7,8 +7,10 @@ use element_mod, only: element_t
 use scamMod
 use constituents, only: cnst_get_ind
 use dimensions_mod, only: nelemd, np
-use time_manager, only: get_nstep, dtime
+use time_manager, only: get_nstep, dtime, is_first_step
 use ppgrid, only: begchunk
+use element_ops, only: get_temperature, get_R_star
+use eos, only: pnh_and_exner_from_eos
 
 implicit none
 
@@ -79,6 +81,7 @@ subroutine scm_setinitial(elem)
             enddo
 
             do k=1,PLEV
+!              if (have_ps) elem(ie)%state%dp3d(i,j,k,1) = &
               if (have_ps) elem(ie)%state%ps_v(i,j,1) = psobs
               if (have_u) elem(ie)%state%v(i,j,1,k,1) = uobs(k)
               if (have_v) elem(ie)%state%v(i,j,2,k,1) = vobs(k)
@@ -127,7 +130,7 @@ subroutine apply_SC_forcing(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     use control_mod, only : use_cpstar, qsplit
     use hybvcoord_mod, only : hvcoord_t
     use element_mod, only : element_t
-    use physical_constants, only : Cp, cpwater_vapor
+    use physical_constants, only : Cp, Rgas, cpwater_vapor
     use time_mod
     use constituents, only: pcnst
     use time_manager, only: get_nstep
@@ -145,13 +148,17 @@ subroutine apply_SC_forcing(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     real (kind=real_kind), dimension(np,np)  :: E
     real (kind=real_kind), dimension(np,np)  :: suml,suml2,v1,v2
     real (kind=real_kind), dimension(np,np,nlev)  :: sumlk, suml2k
-    real (kind=real_kind), dimension(np,np,nlev)  :: p,T_v,phi
+    real (kind=real_kind), dimension(np,np,nlev)  :: p,T_v,phi, pnh
+    real (kind=real_kind), dimension(np,np,nlev+1) :: dpnh_dp_i
+    real (kind=real_kind), dimension(np,np,nlev)  :: dp, exner, vtheta_dp, Rstar
+    real (kind=real_kind), dimension(np,np,nlev) :: dpscm
     real (kind=real_kind) :: cp_star1,cp_star2,qval_t1,qval_t2
     real (kind=real_kind) :: Qt,dt
     real (kind=real_kind), dimension(nlev,pcnst) :: stateQin1, stateQin2, stateQin_qfcst
     real (kind=real_kind), dimension(nlev,pcnst) :: forecast_q
     real (kind=real_kind), dimension(nlev) :: dummy1, dummy2, forecast_t, forecast_u, forecast_v
     real (kind=real_kind) :: forecast_ps
+    real (kind=real_kind) :: temperature(np,np,nlev)
     logical :: wet
 
     integer:: icount
@@ -169,17 +176,31 @@ subroutine apply_SC_forcing(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     !        Cp*dpdn(n)*T(n+1) + (Cpv-Cp) Qdpdn(n)*T(n+1)
     !        [Cp + (Cpv-Cp) Q(n)] *dpdn(n)*T(n+1) 
 
-    ie=1
-
+!    do ie=1,nelemd
+    ie = 1
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k)
 #endif
 
     do k=1,nlev
       p(:,:,k) = hvcoord%hyam(k)*hvcoord%ps0 + hvcoord%hybm(k)*elem(ie)%state%ps_v(:,:,t1)
+      dpscm(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+          ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,t1)
     end do
+    
+#ifdef MODEL_THETA_L
+      dp(:,:,:) = elem(ie)%state%dp3d(:,:,:,t1)
+!      dp(:,:,:) = dpscm(:,:,:)
+      call pnh_and_exner_from_eos(hvcoord,elem(ie)%state%vtheta_dp(:,:,:,t1),&
+          dp,elem(ie)%state%phinh_i(:,:,:,t1),pnh,exner,dpnh_dp_i)      
+#endif    
+
+!    write(*,*) 'dphost ', dp(1,1,:)
+!    write(*,*) 'dpscm ', dpscm(1,1,:)
 
     dt=dtime
+    
+    call get_temperature(elem(ie),temperature,hvcoord,t1)
 
     i=1
     j=1
@@ -196,27 +217,40 @@ subroutine apply_SC_forcing(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     dummy2(:) = 0.0_real_kind
     forecast_ps = elem(ie)%state%ps_v(i,j,t1)
 
+#ifdef MODEL_THETA_L    
+    ! At first time step the forcing term is set to the 
+    !  initial condition temperature profile.  Do NOT use
+    !  as it will cause temperature profile to blow up.
+    if ( is_first_step() ) then
+      dummy1(:) = 0.0
+    endif
+#endif
+
     call forecast(begchunk,elem(ie)%state%ps_v(i,j,t1),&
            elem(ie)%state%ps_v(i,j,t1),forecast_ps,forecast_u,&
            elem(ie)%state%v(i,j,1,:,t1),elem(ie)%state%v(i,j,1,:,t1),&
            forecast_v,elem(ie)%state%v(i,j,2,:,t1),&
            elem(ie)%state%v(i,j,2,:,t1),forecast_t,&
 #ifdef MODEL_THETA_L	    
-           elem(ie)%derived%FT(i,j,:),elem(ie)%derived%FT(i,j,:),&
+           temperature(i,j,:),temperature(i,j,:),&
 #else
            elem(ie)%state%T(i,j,:,t1),elem(ie)%state%T(i,j,:,t1),&
 #endif
            forecast_q,stateQin2,stateQin1,dt,dummy1,dummy2,dummy2,&
-           stateQin_qfcst,p(i,j,:),stateQin1,1)         
+           stateQin_qfcst,p(i,j,:),stateQin1,1)      
+
+    elem(ie)%state%Q(i,j,:,:) = forecast_q(:,:)
 
 #ifdef MODEL_THETA_L
     elem(ie)%derived%FT(i,j,:) = forecast_t(:)
+     call get_R_star(Rstar,elem(ie)%state%Q(:,:,:,1))
+     elem(ie)%state%vtheta_dp(i,j,:,t1) = (forecast_t(:)*Rstar(i,j,:)*dp(i,j,:))/&
+                (Rgas*exner(i,j,:))
 #else
-    elem(ie)%state%T(i,j,:,t1) = forecast_t(:)
+    elem(ie)%state%T(i,j,:,t1) = forecast_t(:)                    
 #endif
     elem(ie)%state%v(i,j,1,:,t1) = forecast_u(:)
     elem(ie)%state%v(i,j,2,:,t1) = forecast_v(:)
-    elem(ie)%state%Q(i,j,:,:) = forecast_q(:,:) 
 
     end subroutine apply_SC_forcing
 
