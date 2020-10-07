@@ -356,11 +356,8 @@ CONTAINS
        nets=dom_mt(ithr)%start
        nete=dom_mt(ithr)%end
        hybrid = hybrid_create(par,ithr,hthreads)
-       
-       write(*,*) 'QB4DYN ', dyn_state%elem(1)%state%Q(1,1,:,1)
 
        if (.not. use_3dfrc) then
-         write(*,*) 'DOINGDYNAMICS'
          do n=1,se_nsplit
            ! forward-in-time RK, with subcycling
            call t_startf("prim_run_sybcycle")
@@ -369,8 +366,6 @@ CONTAINS
            call t_stopf("prim_run_sybcycle")
          end do
        endif
-       
-       write(*,*) 'QADYN ', dyn_state%elem(1)%state%Q(1,1,:,1)
 
        if (single_column) then
          call apply_SC_forcing(dyn_state%elem,hvcoord,TimeLevel,3,.false.,nets,nete)

@@ -1341,7 +1341,7 @@ contains
            nets_in=nets
            nete_in=nete
          endif
-         write(*,*) 'PRIMhere!'
+         write(*,*) 'PRIMhere!', dt_q, dt, dt_remap
          call prim_step_scm(elem, nets, nete, dt, tl, hvcoord)
        endif
 
@@ -1376,9 +1376,12 @@ contains
                   nets_in=nets
                   nete_in=nete
                 endif
-		
-                call vertical_remap(hybrid, elem, hvcoord, dt_remap, tl%np1, -1, &
-		                    nets_in, nete_in)
+
+!                call vertical_remap(hybrid, elem, hvcoord, dt_remap, tl%np1, -1, &
+!		                    nets_in, nete_in)
+                                    
+                call vertical_remap(hybrid, elem, hvcoord, dt_remap, tl%np1, np1_qdp, &
+		                    nets_in, nete_in)                    
              end if
           end if
        end if
@@ -1386,7 +1389,7 @@ contains
     enddo
     call t_stopf("prim_step_dyn")
 
-    if (qsize > 0) then
+    if (qsize > 0 .and. .not. single_column) then
        call t_startf("PAT_remap")
        call Prim_Advec_Tracers_remap(elem, deriv1, hvcoord, hybrid, dt_q, tl, nets, nete)
        call t_stopf("PAT_remap")
@@ -1398,7 +1401,7 @@ contains
     end if
 
     ! Remap tracers.
-    if (qsize > 0) then
+    if (qsize > 0 .and. .not. single_column) then
        call sl_vertically_remap_tracers(hybrid, elem, nets, nete, tl, dt_q)
     end if
   end subroutine prim_step_flexible
@@ -1437,7 +1440,7 @@ contains
     do ie = nets,nete
        elem(ie)%derived%eta_dot_dpdn = 0     ! mean vertical mass flux
        elem(ie)%derived%vn0 = 0              ! mean horizontal mass flux
-       elem(ie)%derived%omega_p = 0
+!       elem(ie)%derived%omega_p = 0
        if (nu_p > 0) then
           elem(ie)%derived%dpdiss_ave = 0
           elem(ie)%derived%dpdiss_biharmonic = 0
@@ -1755,8 +1758,6 @@ contains
     integer :: ie, t, q,k,i,j,n,qn0
     real (kind=real_kind)                          :: maxcflx, maxcfly
     real (kind=real_kind) :: dp_np1(np,np)
-
-    dt_q = dt*dt_tracer_factor
  
     ! ===============
     ! initialize mean flux accumulation variables and save some variables at n0
@@ -1782,20 +1783,20 @@ contains
     call TimeLevel_Qdp(tl, dt_tracer_factor, qn0)  ! compute current Qdp() timelevel 
     call set_prescribed_scm(elem,dt,tl)
     
-    write(*,*) 'PRESCRIBEDSCMHERE'
+!    write(*,*) 'PRESCRIBEDSCMHERE'
     
-    do n=2,dt_tracer_factor
+!    do n=2,dt_tracer_factor
  
-      call TimeLevel_update(tl,"leapfrog")
-      if (ftype==4) call ApplyCAMforcing_dynamics(elem,hvcoord,tl%n0,dt,nets,nete)       
+!      call TimeLevel_update(tl,"leapfrog")
+!      if (ftype==4) call ApplyCAMforcing_dynamics(elem,hvcoord,tl%n0,dt,nets,nete)       
 
       ! get timelevel for accessing tracer mass Qdp() to compute virtual temperature      
-      call TimeLevel_Qdp(tl, dt_tracer_factor, qn0)  ! compute current Qdp() timelevel      
+!      call TimeLevel_Qdp(tl, dt_tracer_factor, qn0)  ! compute current Qdp() timelevel      
       
       ! call the single column forcing
-      call set_prescribed_scm(elem,dt,tl)
+!      call set_prescribed_scm(elem,dt,tl)
       
-    enddo
+!    enddo
 
   end subroutine prim_step_scm  
 
@@ -1901,17 +1902,18 @@ contains
     do k=1,nlev
       elem(1)%state%dp3d(:,:,k,np1) = elem(1)%state%dp3d(:,:,k,n0) &
         + dt*(eta_dot_dpdn(:,:,k+1) - eta_dot_dpdn(:,:,k))    
-    enddo       
-    
-    write(*,*) 'DP3D ', elem(1)%state%dp3d(1,1,:,np1)
+    enddo
+
+    do k=1,nlev
+      elem(1)%state%vtheta_dp(:,:,k,np1) = (elem(1)%state%vtheta_dp(:,:,k,np1)/ &
+                      elem(1)%state%dp3d(:,:,k,n0))*elem(1)%state%dp3d(:,:,k,np1)
+    enddo
 
     do p=1,qsize
       do k=1,nlev
         elem(1)%state%Qdp(:,:,k,p,np1_qdp)=elem(1)%state%Q(:,:,k,p)*elem(1)%state%dp3d(:,:,k,np1)
       enddo
     enddo
-    
-    write(*,*) 'QdpSTUFF ', elem(1)%state%Qdp(1,1,:,1,np1_qdp)
     
   end subroutine set_prescribed_scm        
     

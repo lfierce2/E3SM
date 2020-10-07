@@ -463,13 +463,8 @@ end if
 !
 
    do k=1,plev
-#ifdef MODEL_THETA_L
-     tfcst(k) = tfcst(k) + wfld(k)*t3m1(k)*rair/(cpair*pmidm1(k)) &
-         + (t2(k) + divt(k))     
-#else
      tfcst(k) = tfcst(k) + ztodt*wfld(k)*t3m1(k)*rair/(cpair*pmidm1(k)) &
-         + ztodt*(t2(k) + divt(k))
-#endif
+         + ztodt*(t2(k) + divt(k))        
      do m=1,pcnst
        qfcst(1,k,m) = qfcst(1,k,m) + ztodt*divq(k,m)
      end do
